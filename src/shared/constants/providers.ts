@@ -3,7 +3,16 @@
 // Free Providers
 export const FREE_PROVIDERS = {
   iflow: { id: "iflow", alias: "if", name: "iFlow AI", icon: "water_drop", color: "#6366F1" },
-  qwen: { id: "qwen", alias: "qw", name: "Qwen Code", icon: "psychology", color: "#10B981" },
+  qwen: {
+    id: "qwen",
+    alias: "qw",
+    name: "Qwen Code",
+    icon: "psychology",
+    color: "#10B981",
+    deprecated: true,
+    deprecationReason:
+      "Qwen OAuth free tier was discontinued on 2026-04-15. Use 'alicode', 'alicode-intl', or 'openrouter' provider with API key instead.",
+  },
   "gemini-cli": {
     id: "gemini-cli",
     alias: "gc",

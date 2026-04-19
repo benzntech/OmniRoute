@@ -164,6 +164,68 @@ export const CLI_TOOLS = {
       { id: "gpt-oss-120b-medium", name: "GPT OSS 120B Medium", alias: "gpt-oss-120b-medium" },
     ],
   },
+  qwen: {
+    id: "qwen",
+    name: "Qwen Code",
+    icon: "psychology",
+    color: "#10B981",
+    description: "Alibaba Qwen Code CLI — OpenAI-compatible endpoint",
+    docsUrl: "https://qwenlm.github.io/qwen-code-docs/",
+    configType: "guide",
+    defaultCommand: "qwen",
+    notes: [
+      {
+        type: "info",
+        text: "Qwen Code supports custom OpenAI-compatible API endpoints via modelProviders in settings.json.",
+      },
+      {
+        type: "warning",
+        text: "Config path: Linux/macOS ~/.qwen/settings.json • Windows %USERPROFILE%\\.qwen\\settings.json",
+      },
+      {
+        type: "error",
+        text: "Qwen OAuth free tier was discontinued on 2026-04-15. You need a Coding Plan or an API key provider (alicode, openrouter, etc.) to continue using Qwen Code.",
+      },
+    ],
+    modelAliases: ["default", "claude-sonnet", "claude-opus", "gemini-pro", "gemini-flash"],
+    defaultModels: [
+      {
+        id: "default",
+        name: "Default Model",
+        alias: "default",
+        envKey: "OPENAI_MODEL",
+        defaultValue: "auto",
+      },
+    ],
+    guideSteps: [
+      { step: 1, title: "Install Qwen Code", desc: "npm install -g @qwen-code/qwen-code" },
+      { step: 2, title: "API Key", type: "apiKeySelector" },
+      { step: 3, title: "Base URL", value: "{{baseUrl}}", copyable: true },
+      { step: 4, title: "Select Model", type: "modelSelector" },
+      {
+        step: 5,
+        title: "Save Config",
+        desc: "Click Save Config below to write your settings.json automatically.",
+      },
+    ],
+    codeBlock: {
+      language: "json",
+      code: `# ~/.qwen/settings.json
+{
+  "modelProviders": {
+    "openai": [{
+      "id": "omniroute",
+      "name": "OmniRoute",
+      "envKey": "OPENAI_API_KEY",
+      "baseUrl": "{{baseUrl}}",
+      "generationConfig": {
+        "model": "{{model}}"
+      }
+    }]
+  }
+}`,
+    },
+  },
   // HIDDEN: gemini-cli
   // "gemini-cli": {
   //   id: "gemini-cli",
