@@ -991,7 +991,7 @@ async function handleChatImplementation(
 
   // Check if model is a combo (has multiple models with fallback)
   telemetry.startPhase("resolve");
-  let combo: any = await getComboForModel(resolvedModelStr);
+  console.log("DEBUG_CALLING_GETCOMBO", resolvedModelStr); let combo: any = await getComboForModel(resolvedModelStr);
   if (reasoningDecision?.targetCombo) combo = reasoningDecision.targetCombo;
 
   // "auto" prefix fuzzy matching: "auto/fast" → "auto/best-fast", etc.
@@ -1000,7 +1000,7 @@ async function handleChatImplementation(
     const suffix = resolvedModelStr.slice(5);
     for (const candidate of [`auto/best-${suffix}`, `auto/${suffix}`]) {
       combo = await getComboForModel(candidate);
-      if (combo) {
+      if (combo) { console.log("Combo resolved:", combo);
         log.info("ROUTING", `"${resolvedModelStr}" → combo "${candidate}" (auto fuzzy)`);
         break;
       }
@@ -1010,7 +1010,7 @@ async function handleChatImplementation(
   const virtualCombo = await createVirtualAutoCombo(autoRouting, combo, apiKeyInfo?.id);
   if (virtualCombo instanceof Response) return virtualCombo;
   combo = virtualCombo;
-  if (combo) {
+  if (combo) { console.log("Combo resolved:", combo);
     if (reasoningDecision) {
       const filtered = filterReasoningCombo(combo, reasoningDecision);
       if (filtered instanceof Response) return filtered;
@@ -1024,7 +1024,7 @@ async function handleChatImplementation(
       return managedComboRejection();
     log.info(
       "CHAT",
-      `Combo "${modelStr}" [${combo.strategy || "priority"}] with ${combo.models.length} models`
+      `Combo "${modelStr}" [${combo.strategy || "priority"}] with ${combo.models?.length || 0} models`
     );
 
     // Pre-check function used by combo routing. For explicit combo live tests,

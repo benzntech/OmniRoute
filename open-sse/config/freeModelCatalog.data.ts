@@ -37,6 +37,7 @@ export const FREE_MODEL_BUDGETS: FreeModelBudget[] = [
   { provider: "agy", modelId: "claude-opus-4-6-thinking", displayName: "Claude Opus 4.6 (Thinking)", monthlyTokens: 0, creditTokens: 0, freeType: "keyless", poolKey: "agy", tos: "avoid" },
   { provider: "agy", modelId: "claude-sonnet-4-6", displayName: "Claude Sonnet 4.6 (Thinking)", monthlyTokens: 0, creditTokens: 0, freeType: "keyless", poolKey: "agy", tos: "avoid" },
   { provider: "agy", modelId: "gpt-oss-120b-medium", displayName: "GPT-OSS 120B (Medium)", monthlyTokens: 0, creditTokens: 0, freeType: "keyless", poolKey: "agy", tos: "avoid" },
+  { provider: "agy", modelId: "laya", displayName: "Laya", monthlyTokens: 0, creditTokens: 0, freeType: "keyless", poolKey: "agy", tos: "avoid" },
   { provider: "ai21", modelId: "jamba-large-1.7", displayName: "jamba-large-1.7", monthlyTokens: 0, creditTokens: 10000000, freeType: "one-time-initial", poolKey: "ai21", tos: "avoid" },
   { provider: "ai21", modelId: "jamba-mini-2", displayName: "jamba-mini-2", monthlyTokens: 0, creditTokens: 10000000, freeType: "one-time-initial", poolKey: "ai21", tos: "avoid" },
   { provider: "api-airforce", modelId: "x-ai/grok-3", displayName: "Grok-3 (Free)", monthlyTokens: 24000000, creditTokens: 0, freeType: "recurring-daily", poolKey: "api-airforce", tos: "caution" },

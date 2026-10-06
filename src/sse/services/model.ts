@@ -700,7 +700,7 @@ export async function getComboForModel(modelStr) {
   try {
     const { resolveComboForModel } = await import("@/lib/db/modelComboMappings");
     const mapped = await resolveComboForModel(baseModelStr || modelStr);
-    if (mapped && (mapped as any).models?.length > 0) {
+    if (mapped && ((mapped as any).models?.length > 0 || (mapped as any).strategy === "auto")) {
       return mapped;
     }
   } catch {

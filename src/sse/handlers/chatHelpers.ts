@@ -172,6 +172,13 @@ export async function resolveModelOrError(
         );
         modelInfo.provider = pick;
         modelInfo.model = (rerouted as any).model;
+      } else if (candidates.length > 0) {
+        log.info(
+          "ROUTING",
+          `codex/${modelInfo.model} → ${candidates[0]}/${modelInfo.model} (ambiguity auto-resolved: first candidate)`
+        );
+        modelInfo.provider = candidates[0];
+        modelInfo.model = (rerouted as any).model;
       }
     }
   }
@@ -267,6 +274,12 @@ export async function resolveModelOrError(
           `${modelStr} → ${pick}/${modelInfo.model} (ambiguity auto-resolved by family)`
         );
         modelInfo.provider = pick;
+      } else if (candidates.length > 0) {
+        log.info(
+          "ROUTING",
+          `${modelStr} → ${candidates[0]}/${modelInfo.model} (ambiguity auto-resolved: first candidate)`
+        );
+        modelInfo.provider = candidates[0];
       } else {
         const message =
           (modelInfo as any).errorMessage ||

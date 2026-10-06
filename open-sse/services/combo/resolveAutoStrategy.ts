@@ -5,6 +5,7 @@ import {
 } from "../../utils/error.ts";
 import { BudgetExceededError, selectProvider as selectAutoProvider } from "../autoCombo/engine.ts";
 import type { ScoringWeights } from "../autoCombo/scoring.ts";
+import { evaluateWithLaya } from "../autoCombo/layaRouter.ts";
 import {
   resolveRequestModePack,
   parseRequestBudgetCap,
@@ -15,7 +16,6 @@ import { buildComplexityRoutingHint } from "../autoCombo/complexityRouter";
 import { getModePack } from "../autoCombo/modePacks.ts";
 import { recordComboIntent } from "../comboMetrics.ts";
 import { estimateTokens } from "../contextManager.ts";
-import { classifyWithConfig } from "../intentClassifier.ts";
 import type { RoutingHint } from "../manifestAdapter";
 import { parseModel } from "../model.ts";
 import { supportsToolCalling } from "../modelCapabilities.ts";
@@ -35,7 +35,6 @@ import {
   _registerExecutionCandidates,
   expandAutoComboCandidatePool,
   extractPromptForIntent,
-  getIntentConfig,
   mapIntentToTaskType,
   scoreAutoTargets,
 } from "./autoStrategy.ts";
@@ -160,6 +159,7 @@ export async function resolveAutoStrategyOrder(
 
   const requestHasTools = Array.isArray(body?.tools) && body.tools.length > 0;
   let eligibleTargets = [...orderedTargets];
+  eligibleTargets = await expandAutoComboCandidatePool(eligibleTargets, combo);
   const compatFilterFailOpen =
     config?.compatFilterFailOpen === true ||
     (settings as { compatFilterFailOpen?: unknown } | null | undefined)?.compatFilterFailOpen ===
@@ -233,14 +233,20 @@ export async function resolveAutoStrategyOrder(
         `Auto strategy: all candidates filtered by approximate context-window policy (est. ${estimatedInputTokens} tokens), falling back to full pool`
       );
     }
-
-    eligibleTargets = await expandAutoComboCandidatePool(eligibleTargets, combo);
   }
 
   const prompt = extractPromptForIntent(body);
-  const systemPrompt = typeof combo?.system_message === "string" ? combo.system_message : undefined;
-  const intentConfig = getIntentConfig(settings, combo);
-  const intent = classifyWithConfig(prompt, intentConfig, systemPrompt);
+  const layaEval = await evaluateWithLaya(prompt);
+  
+  if (!layaEval.isSafe) {
+    log.warn("COMBO", "Laya JS detected potential prompt injection or unsafe content");
+  }
+
+  let intent: any = "simple";
+  if (layaEval.domain === "coding") intent = "code";
+  else if (layaEval.domain === "research" || layaEval.domain === "pro") intent = "reasoning";
+  else if (layaEval.domain === "creative") intent = "creative";
+  
   recordComboIntent(combo.name, intent);
   const taskType = mapIntentToTaskType(intent);
 
@@ -428,6 +434,33 @@ export async function resolveAutoStrategyOrder(
       selectedConnectionId = selection.connectionId ?? null;
       selectionReason = `score=${selection.score.toFixed(3)}${selection.isExploration ? " (exploration)" : ""}`;
     }
+
+    // Complexity-aware routing (2026, opt-in): classify the request's
+    // difficulty and feed a tier hint into scoring so tierAffinity /
+    // specificityMatch favor candidates whose tier matches the request.
+    let autoManifestHint: RoutingHint | null = null;
+    if (config.complexityAwareRouting === true) {
+      autoManifestHint = buildComplexityRoutingHint(
+        eligibleTargets.filter((t) => t.kind === "model"),
+        body,
+        log
+      );
+      if (autoManifestHint) {
+        let recommendedMinTier: "free" | "cheap" | "premium" = "cheap";
+        if (layaEval.complexity >= 0.8) recommendedMinTier = "premium";
+        else if (layaEval.complexity <= 0.3) recommendedMinTier = "free";
+        autoManifestHint.recommendedMinTier = recommendedMinTier;
+        log.info("COMBO", `Laya JS updated minTier=${recommendedMinTier} (complexity=${layaEval.complexity.toFixed(2)})`);
+      }
+    }
+
+    const scoredTargets = scoreAutoTargets(
+      eligibleTargets,
+      routableCandidates,
+      taskType,
+      weights,
+      autoManifestHint
+    );
 
     const rankedTargets = scoredTargets.map((entry) => entry.target);
     const selectedTarget =

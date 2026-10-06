@@ -223,6 +223,8 @@ export async function resolveComboForModel(
         if (combo.isActive === false) {
           continue;
         }
+        combo.id = row.combo_id;
+        combo.name = row.combo_id; // Mapping doesn't return name yet, but ID is sufficient
         return combo;
       } catch {
         // Corrupted combo data — skip

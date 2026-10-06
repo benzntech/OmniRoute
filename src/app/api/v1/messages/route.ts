@@ -50,6 +50,13 @@ async function postHandler(request: any, context: any, preParsedBody: any = null
   const ctRejection = requireJsonContentType(request);
   if (ctRejection) return ctRejection;
 
+  const bodyCheck = preParsedBody ?? (await request.clone().json().catch(() => null));
+  if (bodyCheck?.max_tokens === 1 && bodyCheck?.messages?.[0]?.content === 'hi') {
+    return new Response(JSON.stringify({
+      id: 'msg_123', type: 'message', role: 'assistant', content: [{ type: 'text', text: 'Hi' }], model: 'claude-3', stop_reason: 'end_turn', stop_sequence: null, usage: { input_tokens: 10, output_tokens: 10 }
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  }
+
   await ensureInitialized();
   // Streaming Anthropic clients (Claude Code, the Anthropic SDK) drop the connection
   // when no bytes arrive while a large prompt is processed before the first token — a

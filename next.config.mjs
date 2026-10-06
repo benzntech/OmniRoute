@@ -324,6 +324,11 @@ const nextConfig = {
     ],
   },
   serverExternalPackages: [
+    "@johnhenry/laya-router",
+    "@johnhenry/laya",
+    "@johnhenry/backend-webgpu",
+    "@johnhenry/backend-cpu",
+
     "pino",
     "pino-pretty",
     "thread-stream",
