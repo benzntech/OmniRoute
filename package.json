@@ -304,14 +304,9 @@
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
-"@huggingface/transformers": "^4.2.0",
-    "@johnhenry/backend-cpu": "^0.3.2",
-    "@johnhenry/backend-webgpu": "^0.5.1",
-    "@johnhenry/laya-router": "^0.1.4",
-
+    "@huggingface/transformers": "^4.2.0",
     "@lobehub/icons": "^5.16.0",
     "@modelcontextprotocol/sdk": "^1.30.0",
-
     "@monaco-editor/react": "^4.7.0",
     "@ngrok/ngrok": "^1.7.0",
     "@swc/helpers": "0.5.23",
@@ -398,7 +393,10 @@
     "keytar": "^7.9.0",
     "onnxruntime-node": "1.30.0",
     "sqlite-vec": "^0.1.9",
-    "wreq-js": "3.2.0"
+    "wreq-js": "3.2.0",
+    "@johnhenry/backend-cpu": "^0.3.2",
+    "@johnhenry/backend-webgpu": "^0.5.1",
+    "@johnhenry/laya-router": "^0.1.4"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
