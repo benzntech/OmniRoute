@@ -237,16 +237,16 @@ export async function resolveAutoStrategyOrder(
 
   const prompt = extractPromptForIntent(body);
   const layaEval = await evaluateWithLaya(prompt);
-  
+
   if (!layaEval.isSafe) {
     log.warn("COMBO", "Laya JS detected potential prompt injection or unsafe content");
   }
 
-  let intent: any = "simple";
+  let intent = "simple";
   if (layaEval.domain === "coding") intent = "code";
   else if (layaEval.domain === "research" || layaEval.domain === "pro") intent = "reasoning";
   else if (layaEval.domain === "creative") intent = "creative";
-  
+
   recordComboIntent(combo.name, intent);
   const taskType = mapIntentToTaskType(intent);
 
@@ -328,19 +328,18 @@ export async function resolveAutoStrategyOrder(
         )
       : null;
 
-  const { sourceCandidates, candidates, routableCandidates, scoredTargets } =
-    await evaluateAutoCandidates({
-      targets: eligibleTargets,
-      comboName: combo.name,
-      body,
-      taskType,
-      weights,
-      sessionId: relayOptions?.sessionId,
-      resetWindowConfig,
-      resilienceSettings: autoCandidateResilienceSettings,
-      manifestHint: autoManifestHint,
-      buildAutoCandidates,
-    });
+  const { sourceCandidates, candidates, routableCandidates } = await evaluateAutoCandidates({
+    targets: eligibleTargets,
+    comboName: combo.name,
+    body,
+    taskType,
+    weights,
+    sessionId: relayOptions?.sessionId,
+    resetWindowConfig,
+    resilienceSettings: autoCandidateResilienceSettings,
+    manifestHint: autoManifestHint,
+    buildAutoCandidates,
+  });
   for (let index = 0; index < sourceCandidates.length; index += 1) {
     sourceCandidates[index].cacheAffinity = candidates[index]?.cacheAffinity;
   }
@@ -440,7 +439,7 @@ export async function resolveAutoStrategyOrder(
     // specificityMatch favor candidates whose tier matches the request.
     let autoManifestHint: RoutingHint | null = null;
     if (config.complexityAwareRouting === true) {
-      autoManifestHint = buildComplexityRoutingHint(
+      autoManifestHint = await buildComplexityRoutingHint(
         eligibleTargets.filter((t) => t.kind === "model"),
         body,
         log
@@ -450,7 +449,10 @@ export async function resolveAutoStrategyOrder(
         if (layaEval.complexity >= 0.8) recommendedMinTier = "premium";
         else if (layaEval.complexity <= 0.3) recommendedMinTier = "free";
         autoManifestHint.recommendedMinTier = recommendedMinTier;
-        log.info("COMBO", `Laya JS updated minTier=${recommendedMinTier} (complexity=${layaEval.complexity.toFixed(2)})`);
+        log.info(
+          "COMBO",
+          `Laya JS updated minTier=${recommendedMinTier} (complexity=${layaEval.complexity.toFixed(2)})`
+        );
       }
     }
 

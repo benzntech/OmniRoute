@@ -1,0 +1,28 @@
+From feddc3578b91c43839d8af469d1465edfa757775 Mon Sep 17 00:00:00 2001
+From: benzntech <bensonkbmca@gmail.com>
+Date: Fri, 14 Aug 2026 11:52:27 +0530
+Subject: [PATCH 3/5] docs: refine drift semantics in self-healing cron section
+ (docs-only commits excluded)
+
+---
+ DOCUMENTATION.md | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/DOCUMENTATION.md b/DOCUMENTATION.md
+index a9a9039ce9..a0f707dd2c 100644
+--- a/DOCUMENTATION.md
++++ b/DOCUMENTATION.md
+@@ -298,7 +298,9 @@ severe / drift / head_sha / build_sha`.
+   `drift=1` = unbuilt commits) fires the agent with the diff as context.
+ - Signals: `crashes`/`severe`/`restarts` are monotonic counters that ride in
+   the line — historical baselines never trip ISSUE; only an INCREASE fires it.
+-  `drift=1` means `dist/BUILD_SHA` is behind `git HEAD` (commits never built).
++  `drift=1` means commits touching NON-doc files exist in `git HEAD` that were
++  never built into `dist/` (docs-only commits are filtered out — they cannot
++  affect the runtime bundle, so they never trigger a rebuild cycle).
+ 
+ **The healing agent's pipeline (encoded in the cron prompt):**
+ 
+-- 
+2.54.0 (Apple Git-157)
+

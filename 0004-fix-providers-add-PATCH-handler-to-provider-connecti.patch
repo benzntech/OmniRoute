@@ -1,0 +1,103 @@
+From 3670234b26250b9aed4be630b2f1283f97563dff Mon Sep 17 00:00:00 2001
+From: benzntech <bensonkbmca@gmail.com>
+Date: Fri, 14 Aug 2026 15:45:32 +0530
+Subject: [PATCH 4/5] fix(providers): add PATCH handler to provider connection
+ route
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The OpenAPI spec and the CLI (omniroute providers rotate, generated
+api-commands) both use PATCH /api/providers/[id], but the route only
+implemented PUT — PATCH requests returned 405 and key rotation via the
+CLI silently failed while reporting success (the DB-write fallback only
+catches thrown exceptions, not non-OK HTTP responses).
+
+Add a PATCH handler delegating to the PUT handler: both apply the same
+partial-update schema, so the semantics are identical.
+
+Regression test proves the PATCH export exists and delegates into the
+shared auth path; verified to fail without the fix.
+---
+ src/app/api/providers/[id]/route.ts           |  9 ++++
+ .../unit/providers-route-patch-method.test.ts | 48 +++++++++++++++++++
+ 2 files changed, 57 insertions(+)
+ create mode 100644 tests/unit/providers-route-patch-method.test.ts
+
+diff --git a/src/app/api/providers/[id]/route.ts b/src/app/api/providers/[id]/route.ts
+index 38c1746cc6..ab791eb8f1 100644
+--- a/src/app/api/providers/[id]/route.ts
++++ b/src/app/api/providers/[id]/route.ts
+@@ -375,6 +375,15 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id:
+   }
+ }
+ 
++// PATCH /api/providers/[id] - Update connection (partial)
++// The OpenAPI spec and the CLI (`omniroute providers rotate`, generated
++// api-commands) both use PATCH, but only PUT was implemented — PATCH requests
++// 405'd. PATCH and PUT share the same update semantics here (the schema only
++// applies provided fields), so delegate to the PUT handler.
++export async function PATCH(request: Request, ctx: { params: Promise<{ id: string }> }) {
++  return PUT(request, ctx);
++}
++
+ // DELETE /api/providers/[id] - Delete connection
+ export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
+   const authError = await requireManagementAuth(request);
+diff --git a/tests/unit/providers-route-patch-method.test.ts b/tests/unit/providers-route-patch-method.test.ts
+new file mode 100644
+index 0000000000..0150fdd036
+--- /dev/null
++++ b/tests/unit/providers-route-patch-method.test.ts
+@@ -0,0 +1,48 @@
++import test from "node:test";
++import assert from "node:assert/strict";
++
++// Regression test for the providers-route PATCH gap: the OpenAPI spec and the
++// CLI (`omniroute providers rotate`, generated api-commands) both use
++// PATCH /api/providers/[id], but the route only implemented PUT — PATCH
++// requests 405'd and `providers rotate --new-key` silently failed while
++// reporting success. See PR fix: the route now exports a PATCH handler that
++// delegates to PUT (both apply the same partial-update schema).
++
++async function loadRoute() {
++  return await import(new URL("../../src/app/api/providers/[id]/route.ts", import.meta.url));
++}
++
++test("providers [id] route exports a PATCH handler (CLI rotate 405 regression)", async () => {
++  const route = await loadRoute();
++  assert.equal(
++    typeof route.PATCH,
++    "function",
++    "PATCH handler must exist — CLI rotate sends PATCH per the OpenAPI spec"
++  );
++});
++
++test("PATCH handler delegates to PUT (same partial-update semantics)", async () => {
++  const route = await loadRoute();
++  // The PATCH export delegates to PUT; both share the same update logic. They
++  // are distinct function references (wrapper), so assert both exist and that
++  // invoking PATCH returns whatever PUT would (mock auth rejects first, so a
++  // delegation error surfaces as the PUT auth error, not a 405/undefined).
++  const request = new Request("http://localhost/api/providers/test-id", {
++    method: "PATCH",
++    body: JSON.stringify({ name: "x" }),
++  });
++  const ctx = { params: Promise.resolve({ id: "test-id" }) };
++  const patchResult = await route.PATCH(request, ctx);
++  assert.ok(patchResult, "PATCH should return a response, not 405");
++  assert.equal(
++    patchResult.status,
++    401,
++    "delegation reaches the shared auth path (PUT's auth error)"
++  );
++});
++
++test("providers [id] route still exports PUT and DELETE handlers", async () => {
++  const route = await loadRoute();
++  assert.equal(typeof route.PUT, "function");
++  assert.equal(typeof route.DELETE, "function");
++});
+-- 
+2.54.0 (Apple Git-157)
+

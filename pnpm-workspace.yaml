@@ -7,16 +7,22 @@ packages:
 autoInstallPeers: false
 allowBuilds:
   "@parcel/watcher": true
+  "@playwright/browser-chromium": set this to true or false
   "@swc/core": true
   better-sqlite3: true
+  bun: set this to true or false
   core-js: true
   esbuild: true
   keytar: true
+  koffi: set this to true or false
   libxmljs2: true
   onnxruntime-node: true
+  opencode-ai: set this to true or false
   protobufjs: true
   sharp: true
+  tls-client-node: set this to true or false
   unrs-resolver: true
+  webgpu: set this to true or false
 onlyBuiltDependencies:
   - "@parcel/watcher"
   - "@swc/core"

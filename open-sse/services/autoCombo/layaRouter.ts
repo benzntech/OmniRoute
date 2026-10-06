@@ -1,7 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { defaultLogger } from "../../utils/logger";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 let routerInstance: any = null;
 
 export interface LayaEvaluation {
@@ -11,13 +10,8 @@ export interface LayaEvaluation {
 }
 
 // Polyfill Float16Array for Node runtimes where it is not defined by default
-if (
-  typeof (globalThis as   any)
-    .Float16Array === "undefined"
-) {
-  (
-    globalThis as   any
-  ).Float16Array = Float32Array;
+if (typeof (globalThis as any).Float16Array === "undefined") {
+  (globalThis as any).Float16Array = Float32Array;
 }
 
 /**
@@ -26,7 +20,7 @@ if (
  */
 let layaRouterUnavailable = false;
 
-async function getRouter(): Promise<unknown> {
+async function getRouter(): Promise<any> {
   if (routerInstance) return routerInstance;
   if (layaRouterUnavailable) throw new Error("Laya router unavailable");
   try {
