@@ -5,7 +5,15 @@ import {
 } from "../../utils/error.ts";
 import { BudgetExceededError, selectProvider as selectAutoProvider } from "../autoCombo/engine.ts";
 import type { ScoringWeights } from "../autoCombo/scoring.ts";
-import { evaluateWithLaya } from "../autoCombo/layaRouter.ts";
+import {
+  evaluateWithLaya,
+  prioritizeCandidatesWithLaya,
+  prefilterMessagesWithLaya,
+  calibrateThinkingWithLaya,
+  recommendSamplingParamsWithLaya,
+  type LayaEvaluation,
+} from "../autoCombo/layaRouter.ts";
+import { classifyWithConfig } from "../intentClassifier.ts";
 import {
   resolveRequestModePack,
   parseRequestBudgetCap,
@@ -21,7 +29,7 @@ import { parseModel } from "../model.ts";
 import { supportsToolCalling } from "../modelCapabilities.ts";
 import type { ResilienceSettings } from "../../../src/lib/resilience/settings";
 import { parseAutoConfig } from "./autoConfig.ts";
-import { dedupeTargetsByExecutionKey } from "./comboData.ts";
+import { dedupeTargetsByExecutionKey, isRecord } from "./comboData.ts";
 import {
   getModelContextLimitForModelString,
   providerSupportsEmulatedToolCalling,
@@ -35,6 +43,7 @@ import {
   _registerExecutionCandidates,
   expandAutoComboCandidatePool,
   extractPromptForIntent,
+  getIntentConfig,
   mapIntentToTaskType,
   scoreAutoTargets,
 } from "./autoStrategy.ts";
@@ -130,6 +139,39 @@ export async function evaluateAutoCandidates(options: EvaluateAutoCandidatesOpti
   };
 }
 
+function isLayaOptedIn(
+  combo: ComboLike,
+  settings: Record<string, unknown> | null | undefined,
+  config?: Record<string, unknown> | null
+): boolean {
+  if (process.env.OMNIROUTE_ENABLE_LAYA === "true") return true;
+  if (settings && (settings.enableLayaRouting === true || settings.enableLaya === true))
+    return true;
+  if (
+    config &&
+    (config.enableLayaRouting === true ||
+      config.enableLaya === true ||
+      (config as Record<string, unknown>).laya === true)
+  ) {
+    return true;
+  }
+  const comboAuto = isRecord(combo?.autoConfig)
+    ? (combo.autoConfig as Record<string, unknown>)
+    : isRecord(combo?.config?.auto)
+      ? (combo.config.auto as Record<string, unknown>)
+      : isRecord(combo?.config)
+        ? (combo.config as Record<string, unknown>)
+        : {};
+  return (
+    comboAuto.laya === true ||
+    comboAuto.enableLaya === true ||
+    comboAuto.routerStrategy === "laya" ||
+    comboAuto.routingStrategy === "laya" ||
+    comboAuto.strategyName === "laya" ||
+    (combo as Record<string, unknown>)?.laya === true
+  );
+}
+
 /**
  * Resolve target ordering for the `auto` combo strategy.
  *
@@ -209,7 +251,7 @@ export async function resolveAutoStrategyOrder(
   // Uses the same 4-chars-per-token heuristic as contextManager.ts::compressContext().
   // Null/unknown limits are treated as "include" to avoid incorrectly dropping valid targets.
   const requestMessages = body.messages;
-  const estimatedInputTokens = estimateTokens(
+  let estimatedInputTokens = estimateTokens(
     typeof requestMessages === "string" ||
       (requestMessages !== null && typeof requestMessages === "object")
       ? requestMessages
@@ -236,16 +278,53 @@ export async function resolveAutoStrategyOrder(
   }
 
   const prompt = extractPromptForIntent(body);
-  const layaEval = await evaluateWithLaya(prompt);
+  const systemPrompt = typeof combo?.system_message === "string" ? combo.system_message : undefined;
+  const intentConfig = getIntentConfig(settings, combo);
+  let intent = classifyWithConfig(prompt, intentConfig, systemPrompt);
+  let layaEval: LayaEvaluation | null = null;
 
-  if (!layaEval.isSafe) {
-    log.warn("COMBO", "Laya JS detected potential prompt injection or unsafe content");
+  const layaEnabled = isLayaOptedIn(combo, settings, config);
+  if (layaEnabled) {
+    try {
+      layaEval = await evaluateWithLaya(prompt);
+      if (layaEval) {
+        if (!layaEval.isSafe) {
+          log.warn("COMBO", "Laya JS detected potential prompt injection or unsafe content");
+        }
+
+        // Phase 1 Laya Optimizations: Turn pruning, thinking budget calibration & sampling tuning
+        if (body && typeof body === "object") {
+          if (Array.isArray(body.messages) && body.messages.length > 2) {
+            const originalCount = body.messages.length;
+            const pruned = prefilterMessagesWithLaya(
+              body.messages as Record<string, unknown>[],
+              layaEval,
+              prompt
+            );
+            body.messages = pruned;
+            if (pruned.length < originalCount) {
+              log.info(
+                "COMBO",
+                `Laya prefilter pruned messages from ${originalCount} to ${pruned.length} turns (~50% token overhead reduction)`
+              );
+              estimatedInputTokens = estimateTokens(pruned);
+            }
+          }
+          calibrateThinkingWithLaya(body as Record<string, unknown>, layaEval);
+          recommendSamplingParamsWithLaya(body as Record<string, unknown>, layaEval, prompt);
+        }
+
+        if (layaEval.domain === "coding") intent = "code";
+        else if (layaEval.domain === "research" || layaEval.domain === "pro") intent = "reasoning";
+        else if (layaEval.domain === "creative") intent = "creative";
+      }
+    } catch (err) {
+      log.warn(
+        "COMBO",
+        `Laya evaluation failed; retaining default classifier intent '${intent}': ${err}`
+      );
+    }
   }
-
-  let intent = "simple";
-  if (layaEval.domain === "coding") intent = "code";
-  else if (layaEval.domain === "research" || layaEval.domain === "pro") intent = "reasoning";
-  else if (layaEval.domain === "creative") intent = "creative";
 
   recordComboIntent(combo.name, intent);
   const taskType = mapIntentToTaskType(intent);
@@ -444,7 +523,7 @@ export async function resolveAutoStrategyOrder(
         body,
         log
       );
-      if (autoManifestHint) {
+      if (autoManifestHint && layaEval) {
         let recommendedMinTier: "free" | "cheap" | "premium" = "cheap";
         if (layaEval.complexity >= 0.8) recommendedMinTier = "premium";
         else if (layaEval.complexity <= 0.3) recommendedMinTier = "free";
@@ -465,18 +544,25 @@ export async function resolveAutoStrategyOrder(
     );
 
     const rankedTargets = scoredTargets.map((entry) => entry.target);
+    const prioritizedRankedTargets =
+      layaEnabled && layaEval
+        ? prioritizeCandidatesWithLaya(rankedTargets, layaEval)
+        : rankedTargets;
     const selectedTarget =
-      scoredTargets.find((entry) => {
-        const parsed = parseModel(entry.target.modelStr);
-        const modelId = parsed.model || entry.target.modelStr;
+      prioritizedRankedTargets.find((target) => {
+        const parsed = parseModel(target.modelStr);
+        const modelId = parsed.model || target.modelStr;
         return (
-          entry.target.provider === selectedProvider &&
+          target.provider === selectedProvider &&
           modelId === selectedModel &&
-          (!selectedConnectionId || entry.target.connectionId === selectedConnectionId)
+          (!selectedConnectionId || target.connectionId === selectedConnectionId)
         );
-      })?.target ||
-      rankedTargets[0] ||
+      }) ||
+      prioritizedRankedTargets[0] ||
       eligibleTargets[0];
+    if (layaEnabled && layaEval && selectedTarget && body && typeof body === "object") {
+      calibrateThinkingWithLaya(body as Record<string, unknown>, layaEval, selectedTarget.modelStr);
+    }
     if (!selectedTarget) {
       return {
         earlyResponse: unavailableResponse(
@@ -491,7 +577,7 @@ export async function resolveAutoStrategyOrder(
     // the pre-cutoff behavior), but a quota-blocked target still survives as a
     // final fallback instead of vanishing — the hard cutoff only de-prioritizes.
     orderedTargets = dedupeTargetsByExecutionKey(
-      [selectedTarget, ...rankedTargets, ...eligibleTargets].filter(
+      [selectedTarget, ...prioritizedRankedTargets, ...eligibleTargets].filter(
         (entry): entry is ResolvedComboTarget => entry !== undefined && entry !== null
       )
     );
